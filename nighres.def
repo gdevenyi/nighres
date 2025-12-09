@@ -10,7 +10,7 @@ From: debian_bookworm.sif
 docker/jupyter_notebook_config.py /etc/jupyter/
 
 %environment
-export LD_LIBRARY_PATH=/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
+export LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
 export JAVA_HOME=/usr/lib/jvm/temurin-8-jdk-amd64
 
 %post
@@ -61,18 +61,21 @@ python3 -m venv /venvs/nighres
 which python
 which python3
 
-python -m pip install -U pip wheel setuptools
+python3 -m pip install -U pip wheel setuptools
 
 export   JCC_JDK=/usr/lib/jvm/temurin-8-jdk-amd64
 export JAVA_HOME=/usr/lib/jvm/temurin-8-jdk-amd64
 
 # XXX these don't seem to allow the paths to be found at compile time
 #     for the JCC build
-ldconfig -v /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64
-ldconfig -v /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
+ldconfig -v /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
 
 # see if those dirs got added
 ldconfig -p
+
+# check the cache
+echo "Now is: " $(date)
+ls -l /etc/ld.so.cache
 
 # apparently, ldconfig is not enough
 export JCC_CLFAGS="-shared -fpic"
@@ -81,9 +84,23 @@ export JCC_LFLAGS="-L/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 \
   -L/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server \
   -Wl,-rpath,/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 -ljava -ljvm"
 
-python -m pip install jcc
+python3 -m pip install jcc
 
 # check jcc lib
+# In a functioning environment, the _jcc3 python shared object lib should give
+# the following; in particular note libjava.so libjvm.so libverify.so:
+# ❯ ldd _jcc3.cpython-311-x86_64-linux-gnu.so
+#         linux-vdso.so.1 =>  (0x00007ffcd4f19000)
+#         libjava.so => /usr/lib/jvm/java-1.8.0/jre/lib/amd64/libjava.so (0x00007fa94876d000)
+#         libjvm.so => /usr/lib/jvm/java-1.8.0/jre/lib/amd64/server/libjvm.so (0x00007fa9476bb000)
+#         libstdc++.so.6 => /cbica/software/external/gcc/centos7/9.4.0/lib64/libstdc++.so.6 (0x00007fa9472e1000)
+#         libm.so.6 => /lib64/libm.so.6 (0x00007fa946fdf000)
+#         libgcc_s.so.1 => /cbica/software/external/gcc/centos7/9.4.0/lib64/libgcc_s.so.1 (0x00007fa946dc7000)
+#         libpthread.so.0 => /lib64/libpthread.so.0 (0x00007fa946bab000)
+#         libc.so.6 => /lib64/libc.so.6 (0x00007fa9467dd000)
+#         libverify.so => /usr/lib/jvm/java-1.8.0/jre/lib/amd64/libverify.so (0x00007fa9465ce000)
+#         libdl.so.2 => /lib64/libdl.so.2 (0x00007fa9463ca000)
+#         /lib64/ld-linux-x86-64.so.2 (0x00007fa948c29000)
 ldd /venvs/nighres/lib/python3.11/site-packages/jcc/_jcc3.cpython-311-x86_64-linux-gnu.so
 nm /venvs/nighres/lib/python3.11/site-packages/jcc/_jcc3.cpython-311-x86_64-linux-gnu.so
 
