@@ -1,9 +1,12 @@
 # Start from the official Debian image
 Bootstrap: localimage
-# From: debian_bookworm.sif
-From: ubuntu_noble.sif
+From: debian_bookworm.sif
+# From: ubuntu_noble.sif
+
+# NOTE Debian bookwork provides Python 3.11
 
 %files
+. /nighres
 docker/jupyter_notebook_config.py /etc/jupyter/
 
 %environment
@@ -65,27 +68,32 @@ export JAVA_HOME=/usr/lib/jvm/temurin-8-jdk-amd64
 
 # XXX these don't seem to allow the paths to be found at compile time
 #     for the JCC build
-ldconfig -n /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64
-ldconfig -n /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-ldconfig -X
+ldconfig -v /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64
+ldconfig -v /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
+
+# see if those dirs got added
+ldconfig -p
 
 # apparently, ldconfig is not enough
+export JCC_CLFAGS="-shared -fpic"
 export JCC_LFLAGS="-L/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 \
   -Wl,-rpath,/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 \
   -L/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server \
   -Wl,-rpath,/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 -ljava -ljvm"
 
-python -m pip install -U jcc
+python -m pip install jcc
+
+# check jcc lib
+ldd /venvs/nighres/lib/python3.11/site-packages/jcc/_jcc3.cpython-311-x86_64-linux-gnu.so
+nm /venvs/nighres/lib/python3.11/site-packages/jcc/_jcc3.cpython-311-x86_64-linux-gnu.so
 
 # and need to futz with LD_LIBRARY_PATH because who knows why
-export LD_LIBRARY_PATH=/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-export LD_RUN_PATH=/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
+#export LD_LIBRARY_PATH=/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
+#export LD_RUN_PATH=/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
 
-ldd /venvs/nighres/lib/python3.12/site-packages/jcc/_jcc3.cpython-312-x86_64-linux-gnu.so
-
-git clone https://github.com/nighres/nighres /nighres
+#git clone https://github.com/nighres/nighres /nighres
 cd /nighres
-bash ./build.sh
+./build.sh
 python -m pip install . 
 
 %runscript
