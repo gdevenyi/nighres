@@ -68,14 +68,13 @@ From: debian:bookworm-slim
 
     # create a conda env "nighres"
     conda create -y -q --name nighres
-    conda install conda-forge::openjdk==8.0.412
     conda activate nighres
     conda install -y -q \
         python==3.9 \
         pip \
+        conda-forge::openjdk==8.0.412 \
         jcc \
         Nilearn \
-        conda-forge::openjdk==8.0.412 \
         jupyterlab
     conda clean -y --all
 
