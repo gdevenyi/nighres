@@ -1,126 +1,91 @@
 # Start from the official Debian image
-Bootstrap: localimage
-From: debian_bookworm-slim.sif
-# From: ubuntu_noble.sif
+Bootstrap: docker
+From: debian:bookworm-slim
 
-# NOTE Debian bookwork provides Python 3.11
-
-# XXX no matter if using a venv or pip-installing into
-#     the system-wide locations, the built JCC shared
-#     library
-#         _jcc3.cpython-311-x86_64-linux-gnu.so
-#     does not have libjvm linked
-#     kluge: build local python 3.11 from source
-#       no dice: suffers from the same problem
-
-%files
-. /nighres
-docker/jupyter_notebook_config.py /etc/jupyter/
+# NOTE Attempts at using Debian's Python 3.11 (both with and without venv), and
+#      and a manually compiled Python 3.11 fail due to JCC not properly linking
+#      to libjvm. Miniconda's Python 3.9 works
 
 %environment
-export LD_LIBRARY_PATH=/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-export LD_RUN_PATH=/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-export JAVA_HOME=/usr/lib/jvm/temurin-8-jdk-amd64
-export VIRTUAL_ENV=/venvs/nighres
 
-export PATH=/venvs/nighres/bin:/usr/bin:/usr/sbin:/bin:/sbin
+    # Conda stuff
+    export _CONDA_ROOT=/miniconda3
+    export CONDA_EXE=/miniconda3/bin/conda
+    export _CONDA_EXE=/miniconda3/bin/conda
+    export _CE_M=
+    export _CE_CONDA=
+    export CONDA_PYTHON_EXE=/miniconda3/bin/python
+
+    # nighres is in the "nighres" conda env
+    export PATH=/miniconda3/envs/nighres/bin:/miniconda3/condabin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    export CONDA_PREFIX=/miniconda3/envs/nighres
+    export CONDA_DEFAULT_ENV=nighres
+    export CONDA_PREFIX_1=/miniconda3
 
 %post
-# NOTE all this is done as root by default, no need to "su"
 
-export DEBIAN_FRONTEND="noninteractive"
+    # NOTE everything in the %post section is done as root by default, no need to "su"
 
-# Install necessary tools and dependencies
-apt-get update
-apt-get install -y wget gnupg ca-certificates apt-transport-https
+    export DEBIAN_FRONTEND="noninteractive"
 
-# Install temurin JDK 1.8
-mkdir -p /etc/apt/keyrings
-wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | tee /etc/apt/trusted.gpg.d/adoptium.gpg > /dev/null
-echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list
+    # Install necessary tools and dependencies
+    apt-get update -qq
+    apt-get install -y wget gnupg ca-certificates apt-transport-https locales
 
-apt-get update
-apt-get install -y temurin-8-jdk
+    dpkg-reconfigure locales
+    update-locale LANG="C.UTF-8"
 
-apt-get install -y --no-install-recommends \
-    ca-certificates \
-    git \
-    gcc \
-    g++ \
-    libtool \
-    libtool-bin \
-    binutils \
-    build-essential \
-    pkg-config  \
-    binutils \
-    libffi-dev \
-    sqlite3 \
-    libsqlite3-dev \
-    openssl \
-    python3 \
-    python3-pip \
-    python3-dev \
-    python3-full
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        gcc \
+        g++ \
+        libtool \
+        libtool-bin \
+        binutils \
+        build-essential \
+        pkg-config  \
+        binutils \
+        sqlite3 \
+        openssl \
+        wget
 
-rm -rf /var/lib/apt/lists/*
+    # Install miniconda into /miniconda3 which will provide openjdk
+    miniconda_installer=Miniconda3-latest-Linux-x86_64.sh
+    wget https://repo.anaconda.com/miniconda/$miniconda_installer
 
-# Adjust JAVA_HOME if necessary and create a symbolic link to match JCC's expected JDK path
-# As of 2025-12-05, JCC works with Java 1.8 and no later
+    mkdir /miniconda3
+    chmod +x $miniconda_installer
+    ./$miniconda_installer -b -u -p /miniconda3
+    . /miniconda3/bin/activate
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+    conda update -yq -nbase conda
+    conda config --system --prepend channels conda-forge
+    conda config --system --set auto_update_conda false
+    conda config --system --set show_channel_urls true
+    conda clean -y -all
 
-export   JCC_JDK=/usr/lib/jvm/temurin-8-jdk-amd64
-export JAVA_HOME=/usr/lib/jvm/temurin-8-jdk-amd64
+    # create a conda env "nighres"
+    conda create -y -q --name nighres
+    conda install conda-forge::openjdk==8.0.412
+    conda activate nighres
+    conda install -y -q \
+        python==3.9 \
+        pip \
+        jcc \
+        Nilearn \
+        conda-forge::openjdk==8.0.412 \
+        jupyterlab
+    conda clean -y --all
 
-# create venv and activate
-mkdir /venvs
-python3 -m venv /venvs/nighres
-. /venvs/nighres/bin/activate
+    git clone https://github.com/nighres/nighres /nighres
+    cd /nighres
+    ./build.sh
 
-# Install JCC
+    rm -rf cbstools-public imcn-imaging nighresjava/build nighresjava/src
 
-python3 -m pip install -U pip wheel setuptools
-
-# XXX these don't seem to allow the paths to be found at compile time
-#     for the JCC build
-ldconfig -v /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 /usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-
-# DEBUG see if those dirs got added
-#ldconfig -p
-
-# apparently, ldconfig is not enough
-export JCC_CLFAGS="-shared -fpic"
-export JCC_LFLAGS="-L/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 \
-  -Wl,-rpath,/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64 -ljava \
-  -L/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server \
-  -Wl,-rpath,/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server -ljvm"
-
-export LD_LIBRARY_PATH=/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-export LD_RUN_PATH=/usr/local/lib:/lib/x86_64-linux-gnu:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64:/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/server
-
-python3 -m pip install jcc
-
-# DEBUG check jcc lib
-# In a functioning environment, the _jcc3 python shared object lib should give
-# the following; in particular note libjava.so libjvm.so libverify.so:
-# ❯ ldd _jcc3.cpython-311-x86_64-linux-gnu.so
-#         linux-vdso.so.1 =>  (0x00007ffcd4f19000)
-#         libjava.so => /usr/lib/jvm/java-1.8.0/jre/lib/amd64/libjava.so (0x00007fa94876d000)
-#         libjvm.so => /usr/lib/jvm/java-1.8.0/jre/lib/amd64/server/libjvm.so (0x00007fa9476bb000)
-#         libstdc++.so.6 => /cbica/software/external/gcc/centos7/9.4.0/lib64/libstdc++.so.6 (0x00007fa9472e1000)
-#         libm.so.6 => /lib64/libm.so.6 (0x00007fa946fdf000)
-#         libgcc_s.so.1 => /cbica/software/external/gcc/centos7/9.4.0/lib64/libgcc_s.so.1 (0x00007fa946dc7000)
-#         libpthread.so.0 => /lib64/libpthread.so.0 (0x00007fa946bab000)
-#         libc.so.6 => /lib64/libc.so.6 (0x00007fa9467dd000)
-#         libverify.so => /usr/lib/jvm/java-1.8.0/jre/lib/amd64/libverify.so (0x00007fa9465ce000)
-#         libdl.so.2 => /lib64/libdl.so.2 (0x00007fa9463ca000)
-#         /lib64/ld-linux-x86-64.so.2 (0x00007fa948c29000)
-ldd /venvs/nighres/lib/python3.11/site-packages/jcc/_jcc3.cpython-311-x86_64-linux-gnu.so
-nm /venvs/nighres/lib/python3.11/site-packages/jcc/_jcc3.cpython-311-x86_64-linux-gnu.so
-
-#git clone https://github.com/nighres/nighres /nighres
-cd /nighres
-./build.sh
-python3 -m pip install . 
-
-%runscript
-/neurodocker/startup.sh "$@"
+    which python3
+    ls -l /miniconda3/envs/nighres/bin
+    python3 -m pip install --root-user-action=ignore . 
 
