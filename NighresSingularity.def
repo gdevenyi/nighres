@@ -17,7 +17,7 @@ From: debian:bookworm-slim
     export CONDA_PYTHON_EXE=/miniconda3/bin/python
 
     # nighres is in the "nighres" conda env
-    export PATH=/miniconda3/envs/nighres/bin:/miniconda3/condabin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    export PATH=/miniconda3/envs/nighres/bin:/miniconda3/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     export CONDA_PREFIX=/miniconda3/envs/nighres
     export CONDA_DEFAULT_ENV=nighres
     export CONDA_PREFIX_1=/miniconda3
