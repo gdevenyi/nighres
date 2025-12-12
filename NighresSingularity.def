@@ -82,7 +82,7 @@ From: debian:bookworm-slim
     cd /nighres
     ./build.sh
 
-    rm -rf cbstools-public imcn-imaging nighresjava/build nighresjava/src
+    rm -rf cbstools-public imcn-imaging fbpa-tools nighresjava/build nighresjava/src
 
     python3 -m pip install --root-user-action=ignore . 
 
