@@ -84,7 +84,5 @@ From: debian:bookworm-slim
 
     rm -rf cbstools-public imcn-imaging nighresjava/build nighresjava/src
 
-    which python3
-    ls -l /miniconda3/envs/nighres/bin
     python3 -m pip install --root-user-action=ignore . 
 
